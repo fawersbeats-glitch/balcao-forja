@@ -93,11 +93,14 @@
 
 <div class="wrap">
   <div class="placar">
-    <div><b id="hoje">R$ 0</b><br><span>vendido hoje (<span id="pecas-hoje">0</span> peças)</span></div>
-    <div style="text-align:right"><b id="receber" style="color:#b91c1c">R$ 0</b><br><span id="receber-sub">a receber desde o acerto</span></div>
+    <div><b id="receber" style="color:#b91c1c">R$ 0</b><br><span id="receber-sub">na semana (desde o acerto)</span></div>
+    <div style="text-align:right"><b id="mes">R$ 0</b><br><span>no mês (<span id="pecas-mes">0</span> vendas)</span></div>
   </div>
   <input class="busca" id="busca" placeholder="🔍 procurar peça…" autocomplete="off">
   <div id="lista"><div class="aviso">Carregando o estoque… ⚒️</div></div>
+
+  <div class="secao">📅 VENDAS POR DIA (mês)</div>
+  <div id="por-dia"><div class="vazio">nenhuma venda no mês ainda</div></div>
 
   <div class="secao">📋 VENDAS DE HOJE</div>
   <div id="vendas-hoje"><div class="vazio">nenhuma venda hoje ainda</div></div>
@@ -205,18 +208,34 @@ function renderVendas() {
   const hoje = VENDAS.filter(v => ehHoje(v.quando));
   let total = 0;
   hoje.forEach(v => total += Number(v.preco || 0));
-  document.getElementById("hoje").textContent = fmt(total);
-  document.getElementById("pecas-hoje").textContent = hoje.length;
-  let receber = 0;
+  let receber = 0, mesTotal = 0, mesN = 0;
+  const agora = new Date();
+  const porDia = {};
   VENDAS.forEach(v => {
-    if (!ULTIMO_ACERTO || new Date(v.quando) > new Date(ULTIMO_ACERTO)) receber += Number(v.preco || 0);
+    const dt = new Date(v.quando);
+    const p = Number(v.preco || 0);
+    if (!ULTIMO_ACERTO || dt > new Date(ULTIMO_ACERTO)) receber += p;
+    if (dt.getFullYear() === agora.getFullYear() && dt.getMonth() === agora.getMonth()) {
+      mesTotal += p; mesN++;
+      const dia = String(dt.getDate()).padStart(2, "0") + "/" + String(dt.getMonth()+1).padStart(2, "0");
+      porDia[dia] = porDia[dia] || { total: 0, n: 0 };
+      porDia[dia].total += p; porDia[dia].n++;
+    }
   });
   document.getElementById("receber").textContent = fmt(receber);
+  document.getElementById("mes").textContent = fmt(mesTotal);
+  document.getElementById("pecas-mes").textContent = mesN;
   if (ULTIMO_ACERTO) {
     const ua = new Date(ULTIMO_ACERTO);
     document.getElementById("receber-sub").textContent =
-      "a receber desde o acerto de " + String(ua.getDate()).padStart(2,"0") + "/" + String(ua.getMonth()+1).padStart(2,"0");
+      "na semana (desde o acerto de " + String(ua.getDate()).padStart(2,"0") + "/" + String(ua.getMonth()+1).padStart(2,"0") + ")";
   }
+  const dias = Object.keys(porDia).sort((a, b) => b.localeCompare(a));
+  document.getElementById("por-dia").innerHTML = dias.length
+    ? dias.map(d => `<div class="venda-linha"><span>📅 <b>${d}</b></span>
+        <span class="hora">${porDia[d].n} venda${porDia[d].n===1?"":"s"}</span>
+        <span style="margin-left:auto"><b>${fmt(porDia[d].total)}</b></span></div>`).join("")
+    : '<div class="vazio">nenhuma venda no mês ainda</div>';
   if (!hoje.length) {
     box.innerHTML = '<div class="vazio">nenhuma venda hoje ainda</div>';
     return;
