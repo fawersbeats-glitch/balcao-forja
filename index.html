@@ -93,8 +93,8 @@
 
 <div class="wrap">
   <div class="placar">
-    <div><b id="hoje">R$ 0</b><br><span>vendido hoje</span></div>
-    <div style="text-align:right"><b id="pecas-hoje">0</b><br><span>peças hoje</span></div>
+    <div><b id="hoje">R$ 0</b><br><span>vendido hoje (<span id="pecas-hoje">0</span> peças)</span></div>
+    <div style="text-align:right"><b id="receber" style="color:#b91c1c">R$ 0</b><br><span id="receber-sub">a receber desde o acerto</span></div>
   </div>
   <input class="busca" id="busca" placeholder="🔍 procurar peça…" autocomplete="off">
   <div id="lista"><div class="aviso">Carregando o estoque… ⚒️</div></div>
@@ -111,6 +111,7 @@
   <button id="modo-inv">🔧 INVENTÁRIO</button>
   <button id="add-item" style="display:none">➕ PEÇA</button>
   <button id="add-fil" style="display:none">🧵 ROLO</button>
+  <button id="btn-acerto" style="display:none">✅ ACERTO</button>
 </div>
 
 <div class="toast" id="toast">
@@ -123,6 +124,7 @@ const FOTOS = {};
 const SB = supabase.createClient("https://hzabcdvskjwmnabrsbev.supabase.co", "sb_publishable_7R1jbsmt8HAFrAQD0pxR0w_1Sr0q-SP");
 const fmt = v => "R$ " + Number(v).toFixed(2).replace(".", ",");
 let ITENS = {}, FIL = {}, VENDAS = [], ultimaVenda = null, toastTimer = null;
+let ULTIMO_ACERTO = null;
 let INVENTARIO = false;
 
 function toast(msg) {
@@ -135,10 +137,11 @@ function toast(msg) {
 const erro = () => toast("⚠️ Não salvou — confere a internet e tenta de novo");
 
 async function refetch() {
-  const [i, f, v] = await Promise.all([
+  const [i, f, v, c] = await Promise.all([
     SB.from("balcao_itens").select("*"),
     SB.from("balcao_filamentos").select("*"),
-    SB.from("balcao_vendas").select("*").order("quando", { ascending: false }).limit(200),
+    SB.from("balcao_vendas").select("*").order("quando", { ascending: false }).limit(500),
+    SB.from("balcao_config").select("*").eq("id", "ultimo_acerto"),
   ]);
   if (i.error || f.error || v.error) {
     document.getElementById("lista").innerHTML =
@@ -146,6 +149,7 @@ async function refetch() {
     return;
   }
   ITENS = {}; i.data.forEach(r => ITENS[r.id] = r);
+  ULTIMO_ACERTO = (c.data && c.data[0]) ? c.data[0].valor : null;
   FIL = {}; f.data.forEach(r => FIL[r.id] = r);
   VENDAS = v.data;
   render(); renderVendas(); renderFil();
@@ -203,6 +207,16 @@ function renderVendas() {
   hoje.forEach(v => total += Number(v.preco || 0));
   document.getElementById("hoje").textContent = fmt(total);
   document.getElementById("pecas-hoje").textContent = hoje.length;
+  let receber = 0;
+  VENDAS.forEach(v => {
+    if (!ULTIMO_ACERTO || new Date(v.quando) > new Date(ULTIMO_ACERTO)) receber += Number(v.preco || 0);
+  });
+  document.getElementById("receber").textContent = fmt(receber);
+  if (ULTIMO_ACERTO) {
+    const ua = new Date(ULTIMO_ACERTO);
+    document.getElementById("receber-sub").textContent =
+      "a receber desde o acerto de " + String(ua.getDate()).padStart(2,"0") + "/" + String(ua.getMonth()+1).padStart(2,"0");
+  }
   if (!hoje.length) {
     box.innerHTML = '<div class="vazio">nenhuma venda hoje ainda</div>';
     return;
@@ -364,6 +378,7 @@ document.getElementById("modo-inv").addEventListener("click", () => {
   document.getElementById("modo-inv").classList.toggle("on", INVENTARIO);
   document.getElementById("add-item").style.display = INVENTARIO ? "" : "none";
   document.getElementById("add-fil").style.display = INVENTARIO ? "" : "none";
+  document.getElementById("btn-acerto").style.display = INVENTARIO ? "" : "none";
   render(); renderFil();
 });
 async function novoServico() {
@@ -379,6 +394,14 @@ async function novoServico() {
 document.getElementById("add-servico").addEventListener("click", novoServico);
 document.getElementById("add-item").addEventListener("click", novaPeca);
 document.getElementById("add-fil").addEventListener("click", novoFilamento);
+document.getElementById("btn-acerto").addEventListener("click", async () => {
+  const rec = document.getElementById("receber").textContent;
+  if (!confirm(`Receber o acerto de ${rec}?
+
+Isso zera o "a receber" — só confirma se o dinheiro já veio!`)) return;
+  const r = await SB.from("balcao_config").upsert({ id: "ultimo_acerto", valor: new Date().toISOString() });
+  if (r.error) erro(); else { toast(`✅ Acerto de ${rec} recebido!`); refetch(); }
+});
 
 refetch();
 setInterval(refetch, 12000);
