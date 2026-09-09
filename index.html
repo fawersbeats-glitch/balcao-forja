@@ -107,6 +107,7 @@
 </div>
 
 <div class="rodape-fixo">
+  <button id="add-servico">💼 SERVIÇO</button>
   <button id="modo-inv">🔧 INVENTÁRIO</button>
   <button id="add-item" style="display:none">➕ PEÇA</button>
   <button id="add-fil" style="display:none">🧵 ROLO</button>
@@ -365,6 +366,17 @@ document.getElementById("modo-inv").addEventListener("click", () => {
   document.getElementById("add-fil").style.display = INVENTARIO ? "" : "none";
   render(); renderFil();
 });
+async function novoServico() {
+  const desc = prompt("O que foi feito? (descreve o serviço)");
+  if (!desc || !desc.trim()) return;
+  const valor = parseFloat(String(prompt("Quanto cobrou? (R$)", "")).replace(",", "."));
+  if (isNaN(valor) || valor <= 0) return toast("⚠️ Valor inválido — tenta de novo");
+  const r = await SB.from("balcao_vendas").insert({
+    item_id: "servico", nome: "Serviço: " + desc.trim(), preco: valor });
+  if (r.error) erro();
+  else { toast(`💼 <b>${desc.trim()}</b> — ${fmt(valor)} registrado!`); refetch(); }
+}
+document.getElementById("add-servico").addEventListener("click", novoServico);
 document.getElementById("add-item").addEventListener("click", novaPeca);
 document.getElementById("add-fil").addEventListener("click", novoFilamento);
 
