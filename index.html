@@ -210,11 +210,17 @@ function renderVendas() {
   hoje.forEach(v => total += Number(v.preco || 0));
   let receber = 0, mesTotal = 0, mesN = 0;
   const agora = new Date();
+  // a semana zera toda segunda-feira 00:00; o acerto so conta se for mais recente
+  const segunda = new Date(agora);
+  segunda.setHours(0, 0, 0, 0);
+  segunda.setDate(segunda.getDate() - ((segunda.getDay() + 6) % 7));
+  let corte = segunda;
+  if (ULTIMO_ACERTO && new Date(ULTIMO_ACERTO) > segunda) corte = new Date(ULTIMO_ACERTO);
   const porDia = {};
   VENDAS.forEach(v => {
     const dt = new Date(v.quando);
     const p = Number(v.preco || 0);
-    if (!ULTIMO_ACERTO || dt > new Date(ULTIMO_ACERTO)) receber += p;
+    if (dt > corte) receber += p;
     if (dt.getFullYear() === agora.getFullYear() && dt.getMonth() === agora.getMonth()) {
       mesTotal += p; mesN++;
       const dia = String(dt.getDate()).padStart(2, "0") + "/" + String(dt.getMonth()+1).padStart(2, "0");
@@ -225,11 +231,10 @@ function renderVendas() {
   document.getElementById("receber").textContent = fmt(receber);
   document.getElementById("mes").textContent = fmt(mesTotal);
   document.getElementById("pecas-mes").textContent = mesN;
-  if (ULTIMO_ACERTO) {
-    const ua = new Date(ULTIMO_ACERTO);
-    document.getElementById("receber-sub").textContent =
-      "na semana (desde o acerto de " + String(ua.getDate()).padStart(2,"0") + "/" + String(ua.getMonth()+1).padStart(2,"0") + ")";
-  }
+  const cd = String(corte.getDate()).padStart(2,"0") + "/" + String(corte.getMonth()+1).padStart(2,"0");
+  document.getElementById("receber-sub").textContent = (corte === segunda)
+    ? "na semana (zera toda segunda — " + cd + ")"
+    : "na semana (desde o acerto de " + cd + ")";
   const dias = Object.keys(porDia).sort((a, b) => b.localeCompare(a));
   document.getElementById("por-dia").innerHTML = dias.length
     ? dias.map(d => `<div class="venda-linha"><span>📅 <b>${d}</b></span>
